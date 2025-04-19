@@ -1,53 +1,30 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
+import joblib
 import re
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score
-from wordcloud import WordCloud
 import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+from wordcloud import WordCloud
 from collections import Counter
 
-# Download stopwords
+# Download NLTK data
 nltk.download('stopwords')
 
-# Load dataset
-@st.cache_data
-def load_data():
-    data = pd.read_csv("Restaurant_Reviews.tsv", sep="\t")
-    return data
+# Load model, vectorizer, and label encoder
+model = joblib.load("Restaurant_review_model.pkl")
+vectorizer = joblib.load("vectorizer.pkl")
+label_encoder = joblib.load("label_encoder.pkl")
 
-data = load_data()
-
-# Preprocessing
+# Preprocess function
 ps = PorterStemmer()
 stop_words = set(stopwords.words("english"))
 
 def preprocess(text):
     text = re.sub('[^a-zA-Z]', ' ', text).lower().split()
     return " ".join([ps.stem(word) for word in text if word not in stop_words])
-
-# Process all reviews
-corpus = [preprocess(review) for review in data["Review"]]
-
-# TF-IDF vectorizer
-vectorizer = TfidfVectorizer(max_features=1500)
-X = vectorizer.fit_transform(corpus).toarray()
-
-# Encode labels
-label_encoder = LabelEncoder()
-y = label_encoder.fit_transform(data["Liked"])
-
-# Train model
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-model = RandomForestClassifier()
-model.fit(X_train, y_train)
 
 # Streamlit UI
 st.set_page_config(page_title="Restaurant Review Classifier", page_icon="🍽️")
@@ -60,48 +37,56 @@ if st.button("Classify Review"):
     if user_input.strip() == "":
         st.warning("Please enter a review before submitting.")
     else:
-        # Preprocess input
+        # Preprocess the input review
         processed = preprocess(user_input)
         
+        # Show review statistics
         word_count = len(processed.split())
         avg_word_length = np.mean([len(word) for word in processed.split()])
         st.write(f"**Review Length**: {word_count} words")
         st.write(f"**Average Word Length**: {avg_word_length:.2f} characters")
 
-        # Word cloud
+        # Word cloud for most frequent words
         wordcloud = WordCloud(width=800, height=400, background_color='white').generate(processed)
         st.image(wordcloud.to_array(), caption="Word Cloud of Your Review", use_column_width=True)
+        
+        # Vectorize the input and predict sentiment
+        vector = vectorizer.transform([processed]).toarray()
+        result = model.predict(vector)[0]
+        result_label = label_encoder.inverse_transform([result])[0]
+        
+        # Show sentiment probability bar chart
+        sentiment_probs = model.predict_proba(vector)[0]
+        sentiment_labels = label_encoder.classes_
 
-        # Vectorize input
-        input_vector = vectorizer.transform([processed]).toarray()
-        prediction = model.predict(input_vector)[0]
-        probs = model.predict_proba(input_vector)[0]
-        labels = label_encoder.classes_
-
-        # Bar chart of probabilities
+        # Plotting bar chart for sentiment probabilities
         fig, ax = plt.subplots()
-        ax.bar(labels, probs, color=["#FF6666", "#66FF66"])
+        ax.bar(sentiment_labels, sentiment_probs, color=["#FF6666", "#66FF66"])
         ax.set_xlabel("Sentiment")
         ax.set_ylabel("Probability")
         ax.set_title("Sentiment Prediction Probabilities")
         st.pyplot(fig)
 
-        # Show result
-        if prediction == 1:
-            st.success("✅ Positive Review")
+        # Display result
+        if result_label == "Positive":
+            st.success(f"✅ Positive Review")
         else:
-            st.error("❌ Negative Review")
-
-        # Word frequency
-        word_freq = Counter(processed.split())
-        top_words = word_freq.most_common(10)
+            st.error(f"❌ Negative Review")
+        
+        # Show more detailed word frequency information
+        word_list = processed.split()
+        word_freq = Counter(word_list)
+        most_common_words = word_freq.most_common(10)
+        
+        # Display top 10 most frequent words
         st.write("### Top 10 Most Frequent Words")
-        st.write(top_words)
-
-        words, counts = zip(*top_words)
-        fig2, ax2 = plt.subplots()
-        ax2.bar(words, counts, color="skyblue")
-        ax2.set_xlabel("Words")
-        ax2.set_ylabel("Frequency")
-        ax2.set_title("Top 10 Words in the Review")
-        st.pyplot(fig2)
+        st.write(most_common_words)
+        
+        # Bar chart for word frequency
+        words, counts = zip(*most_common_words)
+        fig, ax = plt.subplots()
+        ax.bar(words, counts, color="skyblue")
+        ax.set_xlabel("Words")
+        ax.set_ylabel("Frequency")
+        ax.set_title("Top 10 Words in the Review")
+        st.pyplot(fig)
