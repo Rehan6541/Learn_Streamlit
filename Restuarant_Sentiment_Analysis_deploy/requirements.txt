@@ -3,3 +3,8 @@ nltk
 scikit-learn
 pandas
 joblib
+matplotlib
+seaborn
+numpy
+WordCloud
+Counter
