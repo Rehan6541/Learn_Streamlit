@@ -17,16 +17,16 @@ def clean_text(text):
     return ' '.join(words)
 
 # Streamlit UI
-st.set_page_config(page_title="Sentiment Analysis", layout="centered")
-st.title("📝 Product Review Sentiment Analyzer")
+st.set_page_config(page_title="Restaurant Review Sentiment", layout="centered")
+st.title("🍽️ Restaurant Review Sentiment Analyzer")
 
-st.write("Enter a product review below and see the sentiment prediction:")
+st.write("Share your thoughts about a restaurant, and we'll tell you how positive, negative, or neutral the review sounds!")
 
-user_input = st.text_area("Your Review", "")
+user_input = st.text_area("Enter your restaurant review", "")
 
-if st.button("Analyze"):
+if st.button("Analyze Sentiment"):
     if user_input.strip() == "":
-        st.warning("Please enter a review first.")
+        st.warning("Please enter a restaurant review first.")
     else:
         cleaned = clean_text(user_input)
         polarity = TextBlob(cleaned).sentiment.polarity
